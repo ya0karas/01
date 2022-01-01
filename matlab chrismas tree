@@ -1,0 +1,44 @@
+%Draws a present with the given coordinate + size in a random color
+
+%Note:Given coordinates apply to the lower front + left corner of the
+
+%present (the one closest to the viewer) as seen in the plot
+
+function drawPresent(dx,dy,dz,scalex,scaley,scalez)
+
+
+
+%the standard present coordinates
+
+presentX=[0.5 0.5 0.5 0.5 0.5; 0 1 1 0 0; 0 1 1 0 0; 0 1 1 0 0; 0.5 0.5 0.5 0.5 0.5];
+
+presentY=[0.5 0.5 0.5 0.5 0.5; 0 0 1 1 0; 0 0 1 1 0; 0 0 1 1 0; 0.5 0.5 0.5 0.5 0.5];
+
+presentZ=[0 0 0 0 0; 0 0 0 0 0; 0.5 0.5 0.5 0.5 0.5; 1 1 1 1 1; 1 1 1 1 1];
+
+
+
+%draw some presents with random colors
+
+%scale present and move it to the right place and get the plot handle
+
+myHandle=surf((presentX*scalex+dx),(presentY*scaley+dy), (presentZ*scalez+dz));
+
+%some random color map
+
+randColorMap(:,:,1)=repmat(rand,[5,5]);%r component
+
+randColorMap(:,:,2)=repmat(rand,[5,5]);%g component
+
+randColorMap(:,:,3)=repmat(rand,[5,5]);%b component
+
+%Assign colormap just to the plot handle object of the present, so the tree
+
+%does not change color
+
+set(myHandle,'CData',randColorMap)
+
+shading interp %Nice shding + without grid
+
+
+end % of function

@@ -1,0 +1,272 @@
+Option Explicit
+
+Const nmax As Integer = 100
+
+Private Declare Function OpenProcess Lib "kernel32.dll" (ByVal dwDesiredAccess As Long, ByVal bInheritHandle As Long, ByVal dwProcessId As Long) As Long
+  Private Declare Function GetExitCodeProcess Lib "kernel32.dll" (ByVal hProcess As Long, ByRef lpExitCode As Long) As Long
+  Private Declare Sub Sleep Lib "kernel32.dll" (ByVal dwMilliseconds As Long)
+  Private Const PROCESS_QUERY_INFORMATION       As Long = (&H400)
+  Private Const STILL_ACTIVE       As Long = &H103
+  Public hShell As Long, hProc As Long, lExit As Long
+  Private Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
+ 
+Function fun(X() As Double, si() As Double, alf As Double) As Double
+Dim i As Integer
+Dim alpha(nmax) As Double
+
+'将迭代后的优化点输出到input.txt中
+For i = 1 To Text1(0).Text
+alpha(i) = X(i) + si(i) * alf
+Next i
+Open "input.txt" For Output As #2
+For i = 1 To Text1(0).Text
+Print #2, alpha(i)
+Next i
+Close #2
+
+Dim pid As Long
+Dim hProcess, exitcode As Long
+pid = Shell("problem6.exe", vbNormalFocus)      '运行problem程序
+'获取进程信息，确保problem程序运行完再进行下一步
+hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, 0, pid)
+Do
+   Call GetExitCodeProcess(hProcess, exitcode)
+   DoEvents
+Loop While exitcode = STILL_ACTIVE
+ Call CloseHandle(hProcess)
+
+'将problem程序运行后得到的函数值返回给fun函数
+Open "result.txt" For Input As #2
+Input #2, fun
+Close #2
+End Function
+
+Function find_ab(x0 As Double, h0 As Double, ByRef a As Double, ByRef b As Double, X() As Double, si() As Double) As Double
+
+'进退法找到极值点区间（a,b）
+    Dim x1#, y1#, x2#, y2#, x3#, y3#, h#
+    h = h0
+    x1 = x0
+    y1 = fun(X, si, x1)
+    x2 = x1 + h
+    y2 = fun(X, si, x2)
+    
+    If y2 > y1 Then
+         h = -h0
+         x3 = x1
+         x1 = x2
+         x2 = x3
+         y3 = y1
+         y1 = y2
+         y2 = y3
+    End If
+    
+    Do
+        x3 = x2 + h
+        y3 = fun(X, si, x3)
+       If y2 > y3 Then
+            h = 2 * h
+            x1 = x2
+            y1 = y2
+            x2 = x3
+            y2 = y3
+        Else
+            Exit Do
+        End If
+    Loop While 1 > 0
+    If h < 0 Then
+        a = x3
+        b = x1
+    Else
+        a = x1
+        b = x3
+    End If
+  End Function
+    
+Function golden(ax As Double, bx As Double, tol As Double, ByRef xmin As Double, X() As Double, si() As Double) As Double
+   Dim x0#, x1#, x2#, x3#, f0#, f1#, f2#, f3#, r#, c#
+  '黄金分割法求极值点
+   r = 0.61803399
+   c = 0.38196601
+   
+    x0 = ax
+    x3 = bx
+    x1 = x0 + c * (x3 - x0)
+    x2 = x0 + r * (x3 - x0)
+ 
+    f1 = fun(X, si, x1)
+    f2 = fun(X, si, x2)
+    
+    Do While Abs(x3 - x0) > tol
+        If f2 < f1 Then
+            x0 = x1
+            x1 = x2
+            x2 = r * x1 + c * x3
+            f0 = f1
+            f1 = f2
+            f2 = fun(X, si, x2)
+        Else
+            x3 = x2
+            x2 = x1
+            x1 = r * x2 + c * x0
+            f3 = f2
+            f2 = f1
+            f1 = fun(X, si, x1)
+        End If
+    Loop
+    If f1 < f2 Then
+        xmin = x1
+        golden = f1
+    Else
+        xmin = x2
+        golden = f2
+    End If
+End Function
+
+Function one_op(X() As Double, si() As Double, n As Integer) As Double
+   Dim i%
+   Dim a#, b#, h0#, x0#, temp#
+   Dim tol#, xmin#, fmin#
+ '一维函数优化求解
+   x0 = 0
+   h0 = Text1(1)
+   tol = Text1(6)
+'给进退法和黄金分割法赋初值
+   temp = find_ab(x0, h0, a, b, X, si)
+   one_op = golden(a, b, tol, xmin, X, si)
+   For i = 1 To n
+        X(i) = X(i) + xmin * si(i)
+   Next i
+End Function
+
+Function powell(p() As Double, di() As Double, n As Integer, tol As Double) As Double
+    Dim i%, j%, ibig%, itmax%
+    Dim iter%, itermax%, del#
+    Dim f1#, f2#, f3#, f_star#   '初点、终点、反射点函数值
+    Dim f_before#, f_after# '每一轮迭代内部的每一次迭代前、后的函数值
+    Dim p_start(nmax + 1) As Double, p_end(nmax + 1) As Double, p_reflection(nmax + 1) As Double '初点、终点、反射点坐标
+    Dim si(nmax + 1) As Double    '当前方向
+    
+    f1 = fun(p, si, 0) '计算初始点函数值
+    itermax = 100
+    iter = 0
+    '限制最大迭代次数，防止死循环
+    Do  '判断是否收敛或者迭代次数超限
+        Do
+            Do  '上面两层循环用于判断是不是满足鲍威尔条件（共两个）
+                iter = iter + 1
+                Text2.Text = iter     '迭代次数
+                f_after = f1          '本轮迭代初始点函数值赋初值
+                ibig = 0
+                del = 0#
+                For i = 1 To n
+                    For j = 1 To n
+                      si(j) = di((j - 1) * n + i)   '依次取方向组某一列作为当前搜索方向
+                    Next j
+                    f_before = f_after
+                    f_after = one_op(p, si, n)
+                    If Abs(f_before - f_after) > del Then
+                        del = Abs(f_before - f_after)
+                        ibig = i
+                    End If
+                Next i
+                For i = 1 To n
+                    p_end(i) = p(i)
+                Next i  '记录本轮迭代终点坐标
+                f2 = f_after '记录本轮迭代终点函数值
+                
+               If 2# * Abs(f1 - f2) <= (Abs(f1) + Abs(f2)) * tol Then
+                    powell = f2
+                    GoTo con
+                End If
+                If iter = itermax Then
+                    powell = f2
+                    GoTo con
+                End If
+                
+                For i = 1 To n
+                    p_reflection(i) = 2 * p_end(i) - p_start(i)       '形成反射点坐标
+                    si(i) = p_end(i) - p_start(i)           '形成新方向
+                Next i
+                
+                f3 = fun(p_reflection, si, 0) '计算反射点函数值
+                
+               If f2 < f3 Then
+                    f1 = f2
+                    For i = 1 To n
+                        p_start(i) = p_end(i)          '如果终点函数值更小，则下轮迭代的初始点坐标与函数值用本轮迭代终点的坐标与函数值
+                    Next i
+                Else
+                    f1 = f3
+                    For i = 1 To n
+                        p_start(i) = p_reflection(i)          '如果反射点函数值更小，则下轮迭代的初始点坐标与函数值用本轮迭代反射点的坐标与函数值
+                    Next i
+                End If
+                
+            Loop While f3 >= f1 '反射点函数值大于初始点函数值
+        Loop While (f1 - 2 * f2 + f3) * (f1 - f2 - del) * (f1 - f2 - del) >= 0.5 * del * (f1 - f3) * (f1 - f3)
+        f_star = one_op(p, si, n) '沿着新方向最搜索一次
+        f1 = f_star
+        For i = 1 To n
+            p_start(i) = p(i)          '将最新点坐标赋给下轮迭代初始点
+        Next i
+        For i = ibig To n - 1
+            For j = 1 To n
+                di((j - 1) * n + i) = di((j - 1) * n + i + 1)
+            Next j
+        Next i
+        
+        For j = i To n
+            di((i - 1) * n + n) = si(i)
+        Next j
+        '形成新的方向组
+    Loop While 1 > 0
+     
+con:
+   End Function
+
+Private Sub Command1_Click()
+    Dim i%, j%, n%, tol#
+    Dim p(nmax + 1) As Double, di(nmax * nmax + 1) As Double
+
+'将初始点输入到input.txt文档中
+Open "input.txt" For Output As #2
+For i = 1 To Text1(0).Text
+If i <= 5 Then
+Print #2, Text1(i).Text
+Else
+Print #2, Text1(i + 1).Text
+End If
+Next i
+Close #2
+
+'text1(0)表示变量个数，di表示搜索方向，p()表示初始点
+   n = Text1(0).Text
+    For i = 1 To n
+        For j = 1 To n
+            If i = j Then
+                di((j - 1) * n + i) = 1
+            Else
+                di((j - 1) * n + i) = 0
+            End If
+        Next j
+    Next i
+    
+'赋初值
+    For i = 1 To n
+'前三个变量初始值从text（3，4，5）中取，第四个变量从text（6）取
+      If i <= 3 Then
+          p(i) = Text1(i + 2).Text
+       Else
+     p(i) = Text1(i + 3).Text
+     End If
+    Next i
+
+'精度从text（2）中得到，text（16）显示鲍威尔法结果
+    tol = Text1(2).Text
+        Text1(16).Text = Format(powell(p, di, n, tol), "###0.00000")
+    For i = 1 To n
+'text(15,14,13,12)显示极值点
+        Text1(16 - i).Text = Format(p(i), "###0.00000")
+    Next i
+End Sub
